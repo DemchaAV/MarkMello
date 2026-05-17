@@ -32,7 +32,7 @@ public sealed class EditorSessionViewModelTests
             "Untitled.md",
             "alpha beta",
             ReadingPreferences.Default,
-            new RenderMarkdownDocumentUseCase(new TestMarkdownRenderer()),
+            new RenderMarkdownDocumentUseCase(new TestMarkdownRenderer(), new FakeDiagramRenderService()),
             imageSourceResolver: null);
 
         Assert.Null(session.CurrentPath);
@@ -80,7 +80,7 @@ public sealed class EditorSessionViewModelTests
         => new(
             new MarkdownSource(path, Path.GetFileName(path), content),
             ReadingPreferences.Default,
-            new RenderMarkdownDocumentUseCase(new TestMarkdownRenderer()),
+            new RenderMarkdownDocumentUseCase(new TestMarkdownRenderer(), new FakeDiagramRenderService()),
             imageSourceResolver: null);
 
     private static string ExtractPlainText(RenderedMarkdownDocument document)

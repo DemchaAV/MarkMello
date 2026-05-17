@@ -163,6 +163,24 @@ internal sealed class TestMarkdownRenderer : IMarkdownDocumentRenderer
     }
 }
 
+/// <summary>
+/// In-memory <see cref="IDiagramRenderService"/> for tests. Defaults to a
+/// Mermaid renderer that echoes the source inside a fake SVG payload, which
+/// keeps the production composition rules satisfied (every supported dialect
+/// must have a renderer) without dragging Naiad into unit tests.
+/// </summary>
+internal sealed class FakeDiagramRenderService : IDiagramRenderService
+{
+    public Func<MarkdownDiagramKind, string, DiagramRenderResult> Handler { get; set; }
+        = (_, source) => new DiagramRenderResult.Success($"<svg data-source=\"{source}\" />");
+
+    public bool IsSupported(MarkdownDiagramKind kind)
+        => kind == MarkdownDiagramKind.Mermaid;
+
+    public DiagramRenderResult Render(MarkdownDiagramKind kind, string source)
+        => Handler(kind, source);
+}
+
 internal sealed class StubUpdateService : IUpdateService
 {
     public UpdateCheckResult NextCheckResult { get; set; }

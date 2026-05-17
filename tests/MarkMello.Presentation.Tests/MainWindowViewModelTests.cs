@@ -546,7 +546,7 @@ public sealed class MainWindowViewModelTests
             settings,
             themeService,
             startupMetrics,
-            new RenderMarkdownDocumentUseCase(new TestMarkdownRenderer()),
+            new RenderMarkdownDocumentUseCase(new TestMarkdownRenderer(), new FakeDiagramRenderService()),
             updateService);
 
         return new TestHarness(loader, saver, picker, settings, startupMetrics, updateService, viewModel);

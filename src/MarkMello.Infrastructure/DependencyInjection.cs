@@ -1,5 +1,6 @@
 using System.Globalization;
 using MarkMello.Application.Abstractions;
+using MarkMello.Infrastructure.Diagrams;
 using MarkMello.Infrastructure.Documents;
 using MarkMello.Infrastructure.Images;
 using MarkMello.Infrastructure.Markdown;
@@ -30,6 +31,7 @@ public static class DependencyInjection
         services.AddSingleton<IDocumentLoader, FileDocumentLoader>();
         services.AddSingleton<IDocumentSaver, FileDocumentSaver>();
         services.AddSingleton<IMarkdownDocumentRenderer, MarkdigMarkdownDocumentRenderer>();
+        services.AddSingleton<IDiagramRenderer, MermaidDiagramRenderer>();
         services.AddSingleton<IImageSourceResolver, DefaultImageSourceResolver>();
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();
         services.AddSingleton<IPlatformServices, DefaultPlatformServices>();
