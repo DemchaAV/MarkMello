@@ -83,6 +83,7 @@ public sealed class MarkdownDocumentTextMap
             MarkdownListBlock list => string.Join(Environment.NewLine, list.Items.Select(static item => string.Join(Environment.NewLine, item.Blocks.Select(ExtractPlainText)))),
             MarkdownHorizontalRuleBlock => string.Empty,
             MarkdownImageBlock => string.Empty,
+            MarkdownDiagramBlock => string.Empty,
             MarkdownCodeBlock code => code.Code,
             MarkdownTableBlock table => ExtractPlainText(table),
             _ => block.ToString() ?? string.Empty
@@ -251,6 +252,14 @@ public sealed class MarkdownDocumentTextMap
                     // Image blocks participate in vertical rhythm but not in
                     // the text stream. Copying "para above, image, para below"
                     // yields the two paragraphs joined by a paragraph break.
+                    AppendBlockSeparator(doubleBreak: true);
+                    return;
+
+                case MarkdownDiagramBlock:
+                    // Diagram blocks follow image-block selection semantics
+                    // (ADR-0005 section 8): a successfully rendered diagram
+                    // is not part of the continuous text flow. Final copy/
+                    // selection behavior for error blocks is refined in M6.
                     AppendBlockSeparator(doubleBreak: true);
                     return;
 

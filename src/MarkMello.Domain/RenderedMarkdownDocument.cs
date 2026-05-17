@@ -95,6 +95,61 @@ public sealed record MarkdownImageBlock(
     double? Width = null,
     double? Height = null) : MarkdownBlock;
 
+/// <summary>
+/// Diagram dialects MarkMello may emit as <see cref="MarkdownDiagramBlock"/>.
+/// Membership in this enum does not imply runtime support — that is decided
+/// by <c>SupportedDiagramDialects</c> in the Application layer plus mandatory
+/// renderer composition validation.
+/// </summary>
+public enum MarkdownDiagramKind
+{
+    /// <summary>Mermaid diagrams (first supported dialect, see ADR-0005).</summary>
+    Mermaid,
+
+    /// <summary>
+    /// PlantUML diagrams. Reserved in the model for future support; not
+    /// emitted by the parser and not declared as a supported dialect until
+    /// a renderer backend is selected via a follow-up ADR.
+    /// </summary>
+    PlantUml,
+}
+
+/// <summary>
+/// Block-level diagram. Emitted by the markdown pipeline when a fenced code
+/// block declares a recognized diagram dialect (currently only
+/// <c>mermaid</c>). The block carries the original diagram source so it can
+/// be rendered later by an <c>IDiagramRenderService</c>, and optionally a
+/// runtime <see cref="RenderResult"/> populated by that service.
+/// </summary>
+/// <param name="Kind">Diagram dialect, decided by the fence info string.</param>
+/// <param name="Source">
+/// Raw diagram source as written in the markdown file, with line breaks
+/// preserved and trailing newline trimmed (matches <see cref="MarkdownCodeBlock"/>
+/// behavior).
+/// </param>
+/// <param name="Info">
+/// Remainder of the fence info string after the dialect token, or <c>null</c>
+/// when the fence carried only the dialect name. Preserved for diagnostics
+/// and future title/attribute parsing.
+/// </param>
+/// <param name="Title">
+/// Optional human-readable title for the diagram. Reserved for future fence
+/// attribute parsing; left <c>null</c> by the current parser.
+/// </param>
+public sealed record MarkdownDiagramBlock(
+    MarkdownDiagramKind Kind,
+    string Source,
+    string? Info = null,
+    string? Title = null) : MarkdownBlock
+{
+    /// <summary>
+    /// Result of rendering <see cref="Source"/> through the diagram service.
+    /// Null until a render pass populates it; never set by the markdown
+    /// parser itself.
+    /// </summary>
+    public DiagramRenderResult? RenderResult { get; init; }
+}
+
 public abstract record MarkdownInline;
 
 public sealed record MarkdownTextInline(string Text) : MarkdownInline;

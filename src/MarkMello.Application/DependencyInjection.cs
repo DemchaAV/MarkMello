@@ -1,3 +1,5 @@
+using MarkMello.Application.Abstractions;
+using MarkMello.Application.Diagrams;
 using MarkMello.Application.UseCases;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,6 +14,7 @@ public static class DependencyInjection
         services.AddSingleton<OpenDocumentUseCase>();
         services.AddSingleton<SaveDocumentUseCase>();
         services.AddSingleton<RenderMarkdownDocumentUseCase>();
+        services.AddSingleton<IDiagramRenderService, DiagramRenderService>();
 
         return services;
     }
