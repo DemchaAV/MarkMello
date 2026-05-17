@@ -33,6 +33,7 @@ Thumbs.db
 # Other
 .editorconfig
 .codex-tmp/
+.claude/
 *.zip
 .tmp*
 
