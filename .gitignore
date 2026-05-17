@@ -36,5 +36,4 @@ Thumbs.db
 *.zip
 .tmp*
 
-# Skaro
-.skaro/
+docs/
