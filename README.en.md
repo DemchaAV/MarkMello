@@ -119,3 +119,10 @@ dotnet run --project ./src/MarkMello.Desktop/MarkMello.Desktop.csproj -- ./sampl
 The project is distributed under the GPL-3.0 license.
 
 See [LICENSE](LICENSE).
+
+## Acknowledgements
+
+Diagram support in MarkMello is built on open-source projects:
+
+- [Naiad](https://github.com/NaiadDiagrams/Naiad) — a .NET library that renders Mermaid diagrams to SVG in-process, without a browser or external runtime. MIT License.
+- [Mermaid](https://github.com/mermaid-js/mermaid) — diagram syntax and specification.

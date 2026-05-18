@@ -65,6 +65,33 @@ Edit mode is deliberately behind a single action. Press `Ctrl+E` or click the ed
 
 When you leave edit mode, MarkMello returns to the clean reading view it started with.
 
+## Diagrams
+
+Fenced ` ```mermaid ` blocks render inline as real diagrams — not as raw source. Rendering happens in-process; no WebView, Node, or network call.
+
+```mermaid
+flowchart LR
+    A[Open file] --> B{Mermaid fence?}
+    B -->|yes| C[Render diagram]
+    B -->|no| D[Render text]
+```
+
+```mermaid
+sequenceDiagram
+    User->>MarkMello: Open sample.md
+    MarkMello->>Naiad: Render Mermaid
+    Naiad-->>MarkMello: SVG
+    MarkMello-->>User: Diagram
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> Reading
+    Reading --> Editing: Ctrl+E
+    Editing --> Reading: Ctrl+E
+    Reading --> [*]
+```
+
 ## Keyboard shortcuts
 
 - `Ctrl+O` — open file
