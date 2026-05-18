@@ -1,4 +1,5 @@
 using System.Text;
+using Avalonia.Media;
 using MarkMello.Application.Abstractions;
 using MarkMello.Domain;
 using MarkMello.Infrastructure.Diagrams;
@@ -8,6 +9,103 @@ namespace MarkMello.Presentation.Tests;
 
 public sealed class AotSafeSvgImageTests
 {
+    [Fact]
+    public void RgbaColorIsParsedWithAlphaInsteadOfFallingBackToInheritedBlack()
+    {
+        // Naiad emits flowchart edge-label backgrounds as
+        // <rect fill="rgba(232,232,232,0.8)" stroke="none"/>. If the
+        // parser does not recognise rgba(), the resolver collapses to
+        // the inherited Colors.Black, producing visible black squares
+        // behind every edge label.
+        var color = AotSafeSvgImage.ParseSvgColorForTesting("rgba(232,232,232,0.8)");
+
+        Assert.NotNull(color);
+        Assert.Equal(232, color!.Value.R);
+        Assert.Equal(232, color.Value.G);
+        Assert.Equal(232, color.Value.B);
+        Assert.InRange(color.Value.A, (byte)200, (byte)206); // 0.8 * 255 ≈ 204
+    }
+
+    [Fact]
+    public void RgbColorWithPercentageComponentsIsParsed()
+    {
+        // CSS allows both numeric (0–255) and percentage (0%–100%) rgb
+        // components. Mermaid does not emit the percentage form today,
+        // but the parser should accept it so SVGs hand-authored against
+        // the CSS spec keep working.
+        var color = AotSafeSvgImage.ParseSvgColorForTesting("rgb(50%, 50%, 50%)");
+
+        Assert.NotNull(color);
+        Assert.Equal(50, color!.Value.R);
+        Assert.Equal(50, color.Value.G);
+        Assert.Equal(50, color.Value.B);
+    }
+
+    [Fact]
+    public void HslColorMapsBackToRgbAccordingToCssSpec()
+    {
+        // Pure red: hue 0, saturation 100%, lightness 50%.
+        var red = AotSafeSvgImage.ParseSvgColorForTesting("hsl(0, 100%, 50%)");
+        Assert.NotNull(red);
+        Assert.Equal(255, red!.Value.R);
+        Assert.Equal(0, red.Value.G);
+        Assert.Equal(0, red.Value.B);
+        Assert.Equal(255, red.Value.A);
+
+        // Pure green: hue 120.
+        var green = AotSafeSvgImage.ParseSvgColorForTesting("hsl(120, 100%, 50%)");
+        Assert.NotNull(green);
+        Assert.Equal(0, green!.Value.R);
+        Assert.Equal(255, green.Value.G);
+        Assert.Equal(0, green.Value.B);
+    }
+
+    [Fact]
+    public void HslColorWithFractionalPercentageMatchesNaiadPieOutput()
+    {
+        // The exact format Mermaid pie diagrams emit: fractional
+        // percentage components without a leading zero.
+        var color = AotSafeSvgImage.ParseSvgColorForTesting("hsl(80, 100%, 56.2745098039%)");
+
+        Assert.NotNull(color);
+        Assert.Equal(255, color!.Value.A);
+        // Yellow-green at L≈56%: green dominates, red is high, blue low.
+        Assert.True(color.Value.G > color.Value.R);
+        Assert.True(color.Value.R > color.Value.B);
+    }
+
+    [Fact]
+    public void HslaColorAppliesAlphaChannel()
+    {
+        var color = AotSafeSvgImage.ParseSvgColorForTesting("hsla(0, 100%, 50%, 0.5)");
+
+        Assert.NotNull(color);
+        Assert.InRange(color!.Value.A, (byte)125, (byte)130);
+        Assert.Equal(255, color.Value.R);
+    }
+
+    [Fact]
+    public void EdgeLabelBackgroundIsLoadedAsLightFillNotBlack()
+    {
+        // End-to-end regression: load the exact <rect> Naiad emits behind
+        // a flowchart edge label and confirm the fill colour parsed by
+        // the renderer is the light-grey rgba background instead of the
+        // inherited Colors.Black fallback.
+        var svg = """
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50">
+              <rect x="10" y="10" width="40" height="24" fill="rgba(232,232,232,0.8)" stroke="none" class="edgeLabel"/>
+            </svg>
+            """;
+
+        var loaded = AotSafeSvgImage.TryLoad(Encoding.UTF8.GetBytes(svg), out var image);
+
+        Assert.True(loaded);
+        Assert.Equal(1, image.CountDrawables(AotSafeSvgImageDrawableKind.Rectangle));
+        var fill = AotSafeSvgImage.ParseSvgColorForTesting("rgba(232,232,232,0.8)");
+        Assert.NotNull(fill);
+        Assert.NotEqual(Colors.Black, fill!.Value);
+    }
+
     [Fact]
     public void TryLoadSupportsBasicStaticSvgSubset()
     {

@@ -1126,6 +1126,12 @@ internal sealed class AotSafeSvgImage : IImage
             : ApplyOpacity(inherited, opacity);
     }
 
+    // Test-only entry point for the colour parser. Lets compatibility
+    // tests confirm specific Naiad-emitted formats (rgba/hsl) round-trip
+    // correctly without poking at internal records.
+    internal static Color? ParseSvgColorForTesting(string value)
+        => TryParseColor(value.Trim(), out var color) ? color : null;
+
     private static bool TryParseColor(string value, out Color color)
     {
         var trimmed = value.Trim();
@@ -1134,9 +1140,28 @@ internal sealed class AotSafeSvgImage : IImage
             return TryParseHexColor(trimmed, out color);
         }
 
-        if (trimmed.StartsWith("rgb(", StringComparison.OrdinalIgnoreCase) && trimmed.EndsWith(')'))
+        if (trimmed.EndsWith(')'))
         {
-            return TryParseRgbColor(trimmed, out color);
+            // Functional notations. Order matters: "rgba(" must be matched
+            // before "rgb(" because the latter is a prefix of the former
+            // only in spirit, not in source — but checking the more
+            // specific token first keeps the dispatch readable.
+            if (trimmed.StartsWith("rgba(", StringComparison.OrdinalIgnoreCase))
+            {
+                return TryParseRgbaColor(trimmed, out color);
+            }
+            if (trimmed.StartsWith("rgb(", StringComparison.OrdinalIgnoreCase))
+            {
+                return TryParseRgbColor(trimmed, out color);
+            }
+            if (trimmed.StartsWith("hsla(", StringComparison.OrdinalIgnoreCase))
+            {
+                return TryParseHslColor(trimmed[5..^1], hasAlpha: true, out color);
+            }
+            if (trimmed.StartsWith("hsl(", StringComparison.OrdinalIgnoreCase))
+            {
+                return TryParseHslColor(trimmed[4..^1], hasAlpha: false, out color);
+            }
         }
 
         if (NamedColors.TryGetValue(trimmed, out color))
@@ -1185,7 +1210,7 @@ internal sealed class AotSafeSvgImage : IImage
     private static bool TryParseRgbColor(string value, out Color color)
     {
         color = default;
-        var numbers = ParseNumberList(value[4..^1]);
+        var numbers = ParseColorComponentList(value[4..^1]);
         if (numbers.Count < 3)
         {
             return false;
@@ -1197,6 +1222,88 @@ internal sealed class AotSafeSvgImage : IImage
             ClampColorByte(numbers[1]),
             ClampColorByte(numbers[2]));
         return true;
+    }
+
+    private static bool TryParseRgbaColor(string value, out Color color)
+    {
+        color = default;
+        var numbers = ParseColorComponentList(value[5..^1]);
+        if (numbers.Count < 4)
+        {
+            return false;
+        }
+
+        // Mermaid emits the SVG/CSS variant where the alpha component is
+        // already in the 0–1 range. Convert to a byte channel so the
+        // resulting Color survives composition without further scaling.
+        var alphaByte = (byte)Math.Clamp(Math.Round(numbers[3] * 255), 0, 255);
+        color = Color.FromArgb(
+            alphaByte,
+            ClampColorByte(numbers[0]),
+            ClampColorByte(numbers[1]),
+            ClampColorByte(numbers[2]));
+        return true;
+    }
+
+    private static bool TryParseHslColor(string body, bool hasAlpha, out Color color)
+    {
+        color = default;
+        var numbers = ParseColorComponentList(body);
+        if (numbers.Count < (hasAlpha ? 4 : 3))
+        {
+            return false;
+        }
+
+        // SVG/CSS HSL: H is in degrees, S and L are percentages (Mermaid
+        // always emits the percentage form). We convert directly to RGB
+        // here instead of constructing an HslColor so the rest of the
+        // pipeline keeps operating on a single Color type.
+        var (r, g, b) = HslToRgb(numbers[0], numbers[1] / 100.0, numbers[2] / 100.0);
+        var alphaByte = hasAlpha
+            ? (byte)Math.Clamp(Math.Round(numbers[3] * 255), 0, 255)
+            : (byte)255;
+        color = Color.FromArgb(
+            alphaByte,
+            ClampColorByte(r * 255),
+            ClampColorByte(g * 255),
+            ClampColorByte(b * 255));
+        return true;
+    }
+
+    private static (double R, double G, double B) HslToRgb(double hueDegrees, double saturation, double lightness)
+    {
+        var h = ((hueDegrees % 360) + 360) % 360;
+        var s = Math.Clamp(saturation, 0, 1);
+        var l = Math.Clamp(lightness, 0, 1);
+        var c = (1 - Math.Abs(2 * l - 1)) * s;
+        var x = c * (1 - Math.Abs((h / 60) % 2 - 1));
+        var m = l - c / 2;
+        double r1, g1, b1;
+        if (h < 60) { r1 = c; g1 = x; b1 = 0; }
+        else if (h < 120) { r1 = x; g1 = c; b1 = 0; }
+        else if (h < 180) { r1 = 0; g1 = c; b1 = x; }
+        else if (h < 240) { r1 = 0; g1 = x; b1 = c; }
+        else if (h < 300) { r1 = x; g1 = 0; b1 = c; }
+        else { r1 = c; g1 = 0; b1 = x; }
+        return (r1 + m, g1 + m, b1 + m);
+    }
+
+    private static List<double> ParseColorComponentList(string value)
+    {
+        // Like <see cref="ParseNumberList"/>, but tolerates the percentage
+        // suffix that CSS colour functions allow (rgb/hsl). The "%" sign
+        // is stripped before parsing — every caller already knows whether
+        // a component is meant to be a percentage by its position.
+        var result = new List<double>();
+        foreach (var raw in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var token = raw.TrimEnd('%').TrimEnd();
+            if (double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+            {
+                result.Add(number);
+            }
+        }
+        return result;
     }
 
     private static byte ClampColorByte(double value)
