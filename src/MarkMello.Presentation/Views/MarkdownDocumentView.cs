@@ -302,6 +302,21 @@ public sealed class MarkdownDocumentView : UserControl
         return true;
     }
 
+    // Test-only: enumerates registered source-line anchor spans without
+    // requiring the view to be laid out. Edit-mode scroll synchronization
+    // needs every block with a SourceSpan (including diagrams) to register
+    // here so the editor cursor can map to the preview block. Layout-
+    // measured offsets live behind <see cref="CreateMeasuredSourceLineAnchors"/>.
+    internal IReadOnlyList<MarkdownSourceSpan> EnumerateRegisteredSourceSpans()
+    {
+        var spans = new List<MarkdownSourceSpan>(_sourceLineAnchors.Count);
+        foreach (var anchor in _sourceLineAnchors)
+        {
+            spans.Add(anchor.SourceSpan);
+        }
+        return spans;
+    }
+
     private List<MarkdownSourceLineAnchorSnapshot> CreateMeasuredSourceLineAnchors()
     {
         var result = new List<MarkdownSourceLineAnchorSnapshot>(_sourceLineAnchors.Count);
