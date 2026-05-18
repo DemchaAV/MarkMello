@@ -35,7 +35,9 @@ public static class DependencyInjection
         services.AddSingleton<IImageSourceResolver, DefaultImageSourceResolver>();
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();
         services.AddSingleton<IPlatformServices, DefaultPlatformServices>();
-        services.AddSingleton<ICommandLineActivation>(_ => new CommandLineActivation(commandLineArgs));
+        services.AddSingleton(_ => new CommandLineActivation(commandLineArgs));
+        services.AddSingleton<ICommandLineActivation>(sp => sp.GetRequiredService<CommandLineActivation>());
+        services.AddSingleton<IFileActivationPublisher>(sp => sp.GetRequiredService<CommandLineActivation>());
         services.AddSingleton(static _ =>
         {
             var client = new HttpClient();

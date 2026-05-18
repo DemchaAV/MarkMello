@@ -70,6 +70,15 @@ internal sealed class StubCommandLineActivation : ICommandLineActivation
     public string? ActivationPath { get; set; }
 
     public string? GetActivationFilePath() => ActivationPath;
+
+    public event EventHandler<FileActivationEventArgs>? FileActivated;
+
+    /// <summary>
+    /// Simulates a runtime «open this file» signal (e.g. the macOS
+    /// AppleEvent that fires while the app is already running).
+    /// </summary>
+    public void RaiseFileActivated(string path)
+        => FileActivated?.Invoke(this, new FileActivationEventArgs(path));
 }
 
 internal sealed class InMemorySettingsStore : ISettingsStore

@@ -4,39 +4,115 @@ using MarkMello.Domain;
 namespace MarkMello.Infrastructure.Platform;
 
 /// <summary>
-/// Ищет первый аргумент командной строки, который существует на диске
-/// и имеет известное расширение (.md/.markdown/.txt).
+/// Двойственный источник «открой файл» сигналов:
+///
+/// <list type="bullet">
+///   <item>На Windows и Linux путь приходит через <c>argv</c> — резолвится
+///   один раз в конструкторе.</item>
+///   <item>На macOS Finder вместо <c>argv</c> присылает Apple Event
+///   <c>odoc</c>. Avalonia 12 пробрасывает его через <c>IActivatableLifetime</c>;
+///   платформенный мост в <c>App.axaml.cs</c> вызывает
+///   <see cref="NotifyFileActivated"/> сюда.</item>
+/// </list>
+///
+/// До того как view-model впервые запросит <see cref="GetActivationFilePath"/>,
+/// поступивший runtime-сигнал кэшируется как стартовый путь — это нужно,
+/// потому что на macOS AppleEvent приходит после <c>OnFrameworkInitializationCompleted</c>,
+/// но до того как окно дойдёт до своей инициализации. После того как стартовый
+/// путь забран, последующие сигналы превращаются в событие
+/// <see cref="FileActivated"/>, и обрабатываются уже работающим приложением.
 /// </summary>
-public sealed class CommandLineActivation : ICommandLineActivation
+public sealed class CommandLineActivation : ICommandLineActivation, IFileActivationPublisher
 {
-    private readonly string[] _args;
+    private readonly Lock _gate = new();
+    private readonly string? _argvActivationPath;
+    private string? _cachedRuntimePath;
+    private bool _initialConsumed;
 
     public CommandLineActivation(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
-        _args = args;
+        _argvActivationPath = ResolveFromArgs(args);
     }
+
+    public event EventHandler<FileActivationEventArgs>? FileActivated;
 
     public string? GetActivationFilePath()
     {
-        foreach (var arg in _args)
+        lock (_gate)
         {
-            if (string.IsNullOrWhiteSpace(arg))
+            _initialConsumed = true;
+            return _argvActivationPath ?? _cachedRuntimePath;
+        }
+    }
+
+    public void NotifyFileActivated(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var normalised = TryNormalisePath(path);
+        if (normalised is null)
+        {
+            return;
+        }
+
+        bool shouldRaiseEvent;
+        lock (_gate)
+        {
+            if (!_initialConsumed)
             {
-                continue;
+                // The view-model has not yet asked for the activation
+                // path. macOS cold-start hits this branch — the AppleEvent
+                // arrives before the main window finishes initializing.
+                // Cache it so the upcoming GetActivationFilePath() call
+                // returns this path as if it had been on argv.
+                _cachedRuntimePath = normalised;
+                return;
             }
 
-            if (!File.Exists(arg))
-            {
-                continue;
-            }
+            shouldRaiseEvent = true;
+        }
 
-            if (SupportedDocumentTypes.IsSupportedPath(arg))
+        if (shouldRaiseEvent)
+        {
+            FileActivated?.Invoke(this, new FileActivationEventArgs(normalised));
+        }
+    }
+
+    private static string? ResolveFromArgs(string[] args)
+    {
+        foreach (var arg in args)
+        {
+            var resolved = TryNormalisePath(arg);
+            if (resolved is not null)
             {
-                return Path.GetFullPath(arg);
+                return resolved;
             }
         }
 
         return null;
+    }
+
+    private static string? TryNormalisePath(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (!File.Exists(value))
+        {
+            return null;
+        }
+
+        if (!SupportedDocumentTypes.IsSupportedPath(value))
+        {
+            return null;
+        }
+
+        return Path.GetFullPath(value);
     }
 }

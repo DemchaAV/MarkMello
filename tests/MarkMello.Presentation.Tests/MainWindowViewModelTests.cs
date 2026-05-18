@@ -161,6 +161,56 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task RuntimeFileActivationOpensDocumentInRunningApp()
+    {
+        // Reproduces the macOS bug: while MarkMello is already running,
+        // double-clicking another .md file in Finder fires an Apple Event
+        // that Avalonia surfaces as FileActivated. The view-model must
+        // route it through OpenPathAsync just like a command-line argument.
+        var harness = CreateHarness();
+        var firstPath = Path.Combine(Path.GetTempPath(), "MarkMello.Tests", "first.md");
+        var secondPath = Path.Combine(Path.GetTempPath(), "MarkMello.Tests", "second.md");
+        harness.Loader.Sources[firstPath] = CreateSource(firstPath, "first");
+        harness.Loader.Sources[secondPath] = CreateSource(secondPath, "second");
+
+        await harness.ViewModel.OpenPathAsync(firstPath);
+        Assert.Equal("first.md", harness.ViewModel.FileName);
+
+        var pending = WaitForDocumentChangeAsync(harness.ViewModel, "second.md");
+        harness.CommandLine.RaiseFileActivated(secondPath);
+        await pending;
+
+        Assert.Equal("second.md", harness.ViewModel.FileName);
+        Assert.Equal("second", harness.ViewModel.Document!.Content);
+    }
+
+    private static Task WaitForDocumentChangeAsync(MainWindowViewModel viewModel, string expectedFileName)
+    {
+        if (viewModel.FileName == expectedFileName)
+        {
+            return Task.CompletedTask;
+        }
+
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Handler(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(MainWindowViewModel.FileName) && viewModel.FileName == expectedFileName)
+            {
+                viewModel.PropertyChanged -= Handler;
+                tcs.TrySetResult();
+            }
+        }
+
+        viewModel.PropertyChanged += Handler;
+        if (viewModel.FileName == expectedFileName)
+        {
+            viewModel.PropertyChanged -= Handler;
+            tcs.TrySetResult();
+        }
+        return tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
     public void OpenAppSettingsCommandSwitchesFromMenuToAppSettings()
     {
         var harness = CreateHarness();
@@ -537,11 +587,12 @@ public sealed class MainWindowViewModelTests
         var themeService = new RecordingThemeService();
         var startupMetrics = new RecordingStartupMetrics();
         var updateService = new StubUpdateService();
+        var commandLine = new StubCommandLineActivation();
         var viewModel = new MainWindowViewModel(
             new OpenDocumentUseCase(loader),
             new SaveDocumentUseCase(saver),
             picker,
-            new StubCommandLineActivation(),
+            commandLine,
             localization,
             settings,
             themeService,
@@ -549,7 +600,7 @@ public sealed class MainWindowViewModelTests
             new RenderMarkdownDocumentUseCase(new TestMarkdownRenderer(), new FakeDiagramRenderService()),
             updateService);
 
-        return new TestHarness(loader, saver, picker, settings, startupMetrics, updateService, viewModel);
+        return new TestHarness(loader, saver, picker, settings, startupMetrics, updateService, commandLine, viewModel);
     }
 
     private sealed record TestHarness(
@@ -559,5 +610,6 @@ public sealed class MainWindowViewModelTests
         InMemorySettingsStore Settings,
         RecordingStartupMetrics StartupMetrics,
         StubUpdateService UpdateService,
+        StubCommandLineActivation CommandLine,
         MainWindowViewModel ViewModel);
 }

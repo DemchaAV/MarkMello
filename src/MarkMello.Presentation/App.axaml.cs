@@ -51,6 +51,47 @@ public partial class App : global::Avalonia.Application
             desktop.MainWindow = window;
         }
 
+        WireFileActivationFromAvalonia();
+
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Bridges Avalonia's <c>IActivatableLifetime.Activated</c> into the
+    /// app's <see cref="IFileActivationPublisher"/>. On macOS Finder
+    /// sends an <c>odoc</c> Apple Event instead of populating <c>argv</c>,
+    /// both at cold-start and while the app is already running — both
+    /// paths surface here as <c>ActivationKind.File</c>. Windows and
+    /// Linux still receive their files through <c>argv</c>, so this
+    /// hook is a no-op there.
+    /// </summary>
+    private void WireFileActivationFromAvalonia()
+    {
+        if (Services is null)
+        {
+            return;
+        }
+
+        if (TryGetFeature(typeof(IActivatableLifetime)) is not IActivatableLifetime activatable)
+        {
+            return;
+        }
+
+        var publisher = Services.GetRequiredService<IFileActivationPublisher>();
+        activatable.Activated += (_, e) =>
+        {
+            if (e.Kind != ActivationKind.File || e is not FileActivatedEventArgs fileArgs)
+            {
+                return;
+            }
+
+            foreach (var file in fileArgs.Files)
+            {
+                if (file.Path is { IsFile: true } uri)
+                {
+                    publisher.NotifyFileActivated(uri.LocalPath);
+                }
+            }
+        };
     }
 }
