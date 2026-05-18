@@ -106,6 +106,13 @@ rm -rf "$bundle_path"
 mkdir -p "$macos_path" "$resources_path"
 
 cp -R "$publish_dir"/. "$macos_path/"
+
+# Native AOT publish ships a *.pdb next to the binary (the linker's
+# debug companion). It is useless to end users and only bloats the
+# DMG, so strip every PDB from the bundle. They stay in the build's
+# publish/ directory for symbol uploads if ever needed.
+find "$macos_path" -type f -name '*.pdb' -delete
+
 cp "$icon_path" "$resources_path/$app_name.icns"
 
 sed \

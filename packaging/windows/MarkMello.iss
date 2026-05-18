@@ -81,7 +81,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 
 [Files]
-Source: "{#MyPublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Native AOT publish drops a *.pdb next to the binary (the linker's
+; debug companion). It is useless to end users and only bloats the
+; installer, so exclude all PDBs from the shipped artefact. They stay
+; in the build's publish/ directory for symbol uploads if ever needed.
+Source: "{#MyPublishDir}\*"; Excludes: "*.pdb"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
