@@ -104,9 +104,11 @@ public sealed class MermaidDiagramRendererTests
 
         // Sanity: the source string is value-typed and not held mutably by
         // the renderer. This protects against future regressions where the
-        // backend would gain a side effect on its input.
+        // backend would gain a side effect on its input. CRLF normalisation
+        // keeps the assertion meaningful on Windows checkouts where the raw
+        // string literal preserves the source file's line endings.
         Assert.Equal(
             "flowchart TD\n    A --> B\n    B --> C",
-            source);
+            source.Replace("\r\n", "\n", StringComparison.Ordinal));
     }
 }
